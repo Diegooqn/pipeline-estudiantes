@@ -1,0 +1,47 @@
+name: Pipeline CI/CD API Estudiantes
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Construccion y pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -v
+      - run: zip -r app.zip app requirements.txt Procfile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app.zip
+
+  deploy:
+    name: Despliegue en Elastic Beanstalk
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      BUCKET: elasticbeanstalk-us-east-1-326911658501
+      APP: api-estudiantes
+      ENV_NAME: Api-estudiantes-env
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+      - name: Subir paquete a S3
+        run: aws s3 cp app.zip s3://$BUCKET/$APP/$GITHUB_SHA.zip
+      - name: Crear version en Beanstalk
+        run: aws elasticbeanstalk create-application-version --application-name $APP --version-label ${GITHUB_SHA::7} --source-bundle S3Bucket=$BUCKET,S3Key=$APP/$GITHUB_SHA.zip
+      - name: Desplegar version
+        run: |
+          aws elasticbeanstalk update-environment --environment-name $ENV_NAME --version-label ${GITHUB_SHA::7}
+          aws elasticbeanstalk wait environment-updated --environment-names $ENV_NAME
