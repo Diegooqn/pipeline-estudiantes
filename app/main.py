@@ -5,7 +5,7 @@ from typing import Dict, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 app = FastAPI(title="API Estudiantes", version=VERSION)
 
